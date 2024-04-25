@@ -113,24 +113,34 @@ class Car(DynamicalSystem):
 		B[3, 0] = self.dt
 		return A, B
 	def draw_trajectories(self, x_trajectories, **kwargs):
+		plt.figure(figsize=(6, 6), dpi=80)
 		ax = plt.subplot(111)
 		if 'constraints' in kwargs:
 			constraints = kwargs['constraints']
 			for constraint in constraints:
 				circle = plt.Circle(constraint.center, constraint.r, color=(0, 0.8, 0.8))
 				ax.add_artist(circle)
-		else:
-			circle1 = plt.Circle((1, 1), 0.5, color=(0, 0.8, 0.8))
-			circle2 = plt.Circle((2, 2), 1, color=(0, 0.8, 0.8))
-			ax.add_artist(circle1)
-			ax.add_artist(circle2)
+		# else:
+		# 	circle1 = plt.Circle((1, 1), 0.5, color=(0, 0.8, 0.8))
+		# 	circle2 = plt.Circle((2, 2), 1, color=(0, 0.8, 0.8))
+		# 	ax.add_artist(circle1)
+		# 	ax.add_artist(circle2)
+
+		start_position = plt.Circle((x_trajectories[0, 0], x_trajectories[1, 0]), 0.05, facecolor='green', label='start')
+		ax.add_patch(start_position)
+		N = x_trajectories.shape[1]
+		final_position = plt.Circle((x_trajectories[0, N-1], x_trajectories[1, N-1]), 0.05, facecolor='red', label='final')
+		ax.add_patch(final_position)
 		for i in range(0, x_trajectories.shape[1]-1, 5):
 			circle_car = plt.Circle((x_trajectories[0, i], x_trajectories[1, i]), 0.1, facecolor='none')
 			ax.add_patch(circle_car)
-			ax.arrow(x_trajectories[0, i], x_trajectories[1, i], 0.1*np.sin(x_trajectories[2, i]), 0.1 * np.cos(x_trajectories[2, i]), head_width=0.05, head_length=0.1, fc='k', ec='k')
+			ax.arrow(x_trajectories[0, i], x_trajectories[1, i], 0.1*np.sin(x_trajectories[2, i]), 0.1 * np.cos(x_trajectories[2, i]), head_width=0.05, head_length=0.05, fc='k', ec='k')
 		ax.set_aspect("equal")
 		ax.set_xlim(-1, 4)
 		ax.set_ylim(-1, 4)
+		plt.xlabel('x (m)')
+		plt.ylabel('y (m)')
+		plt.legend()
 		plt.show()
 
 class Quadrotor(DynamicalSystem):

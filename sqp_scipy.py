@@ -2,6 +2,7 @@ from scipy.optimize import minimize, Bounds
 from systems import DoubleIntegrator, Car
 import numpy as np
 from constraints import CircleConstraintForDoubleIntegrator, CircleConstraintForCar
+import time
 
 
 
@@ -69,7 +70,7 @@ system = Car()
 # set the time horizon
 T = 5               # time horizon
 h = system.dt       # time step
-N = int(T/h) + 1    # number of time steps
+N = int(T/h)        # number of time steps
 
 # set the initial state
 initial_state = np.array([0, 0, 0, 0])
@@ -101,16 +102,25 @@ obj_fun = lambda x: multiple_shooting_objective(x, initial_state, system, N)
 
 # set the constraints
 constraint = CircleConstraintForCar(np.ones(2), 0.5, system)
-constraint2 = CircleConstraintForCar(np.array([2, 2]), 0.5, system)
+constraint2 = CircleConstraintForCar(np.array([2, 2]), 1.0, system)
 cons = ({'type': 'ineq', 'fun': lambda u: multiple_shooting_constraint(u, initial_state, system, N, constraint)}, 
         {'type': 'ineq', 'fun': lambda u: multiple_shooting_constraint(u, initial_state, system, N, constraint2)})
 # cons = ({'type': 'ineq', 'fun': lambda u: multiple_shooting_constraint(u, initial_state, system, N, constraint2)})
 
+# start timer
+start = time.monotonic()
+
 # create a solver
-res = minimize(obj_fun, initial_control, method='SLSQP', bounds=bnds)
+# res = minimize(obj_fun, initial_control, method='SLSQP', bounds=bnds)
+res = minimize(obj_fun, initial_control, method='SLSQP', bounds=bnds, constraints=cons)
+
+# end timer
+end = time.monotonic()
+print("Time elapsed during the process:", end - start)
 
 # predict the trajectory
 x = predict_trajectory(initial_state, res.x, system)
 
 # draw the trajectory
+# system.draw_trajectories(x)
 system.draw_trajectories(x, constraints=[constraint, constraint2])

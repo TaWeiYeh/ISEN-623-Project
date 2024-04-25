@@ -12,15 +12,19 @@ class CDDP:
 		self.system = system
 		self.horizon = horizon
 		self.x_trajectories = np.zeros((self.system.state_size, self.horizon + 1))
-		self.u_trajectories = np.zeros((self.system.control_size, self.horizon))
+		self.u_trajectories = np.ones((self.system.control_size, self.horizon)) * 2.5
+		# self.u_trajectories[0, :] = 2.5
+		# self.u_trajectories[1, :] = 2.0
+		# self.u_trajectories[2, :] = 2.5
+		# self.u_trajectories[3, :] = 2.5
 		self.initial_state = np.copy(initial_state)
 		self.constraints = []
-		self.best_J = 10000
+		self.best_J = 100000000000
 		self.Q_UX = np.zeros((self.system.control_size, self.system.state_size, self.horizon))
 		self.Q_UU = np.zeros((self.system.control_size, self.system.control_size, self.horizon))
 		self.Q_U = np.zeros((self.system.control_size, self.horizon))
-		self.reg_factor = 0.001
-		self.reg_factor_u = 0.001
+		self.reg_factor = 0.01
+		self.reg_factor_u = 0.01
 		self.active_set_tol = 0.01
 
 	def set_initial_trajectories(self, x_trajectories, u_trajectories):
@@ -62,7 +66,7 @@ class CDDP:
 
 				#control limit contraint
 				constraint_A[0:self.system.control_size, 0:self.system.control_size] = np.identity(self.system.control_size)
-				lb[0:self.system.control_size] = -self.system.control_bound - self.u_trajectories[:, i]
+				lb[0:self.system.control_size] = 0 - self.u_trajectories[:, i]
 				ub[0:self.system.control_size] = self.system.control_bound - self.u_trajectories[:, i]
 				lb *= trust_region_scale
 				ub *= trust_region_scale
@@ -90,19 +94,26 @@ class CDDP:
 				if res.info.status != 'solved':
 					feasible = False
 					#print("infeasible, reduce trust region")
-					trust_region_scale *= 0.9
+					trust_region_scale *= 0.5
 					break
 				delta_u = res.x[0:self.system.control_size]
 				u = delta_u + self.u_trajectories[:, i]
 				u_new_trajectories[:, i] = np.copy(u)
+				# print(u)
 				current_J += self.system.calculate_cost(x, u)
 				x = self.system.transition(x, u)
 			x_new_trajectories[:, self.horizon] = np.copy(x)
 			current_J += self.system.calculate_final_cost(x)
+			if current_J > self.best_J+100:
+				feasible = False
+				trust_region_scale *= 0.5
+			else:
+				self.best_J = current_J
 			if feasible == True:
 				self.x_trajectories = np.copy(x_new_trajectories)
 				self.u_trajectories = np.copy(u_new_trajectories)
 				print("total cost", current_J)
+				# print("end traj", x)
 				#self.system.draw_trajectories(self.x_trajectories)
 				#self.system.draw_u_trajectories(self.u_trajectories)
 
@@ -123,7 +134,9 @@ class CDDP:
 			Q_xx = l_xxt + f_x.T.dot(A + self.reg_factor * np.identity(self.system.state_size)).dot(f_x)
 			Q_ux = l_uxt + f_u.T.dot(A + self.reg_factor * np.identity(self.system.state_size)).dot(f_x)
 			Q_uu = l_uut + f_u.T.dot(A + self.reg_factor * np.identity(self.system.state_size)).dot(f_u) + self.reg_factor_u * np.identity(self.system.control_size)
-			
+
+			# print(Q_uu)
+
 			#identify active constraint
 			C = np.empty((self.system.control_size + len(self.constraints), self.system.control_size))
 			D = np.empty((self.system.control_size + len(self.constraints), self.system.state_size))
@@ -137,7 +150,7 @@ class CDDP:
 					D[index, :] = np.zeros(self.system.state_size)
 					index += 1
 					constraint_index[j, i] = 1
-				elif u[j] <= -self.system.control_bound[j] + self.active_set_tol:
+				elif u[j] <= 0 + self.active_set_tol:
 					e = np.zeros(self.system.control_size)
 					e[j] = -1
 					C[index, :] = e
@@ -163,7 +176,7 @@ class CDDP:
 				C = C[0:index, :]
 				D = D[0:index, :]
 				lambda_temp = C.dot(inv(Q_uu)).dot(C.T)
-				lambda_temp = -inv(lambda_temp).dot(C).dot(inv(Q_uu)).dot(Q_u)
+				lambda_temp = -inv(lambda_temp + 0.01 * np.identity(index)).dot(C).dot(inv(Q_uu)).dot(Q_u)
 
 				#remove active constraint with lambda < 0
 				index = 0
@@ -194,6 +207,7 @@ class CDDP:
 				if len(delete_index) < C.shape[0]:
 					C = np.delete(C, delete_index, axis=0)
 					D = np.delete(D, delete_index, axis=0)
+					# C_star = inv(C.dot(inv(Q_uu)).dot(C.T)+ 0.01 * np.identity(index)).dot(C).dot(inv(Q_uu))
 					C_star = inv(C.dot(inv(Q_uu)).dot(C.T)).dot(C).dot(inv(Q_uu))
 					H_star = inv(Q_uu).dot(np.identity(self.system.control_size) - C.T.dot(C_star))
 					k = -H_star.dot(Q_u)
@@ -221,19 +235,13 @@ if __name__ == '__main__':
 	solver = CDDP(system, np.zeros(4), horizon=100)
 	constraint = CircleConstraintForCar(np.ones(2), 0.5, system)
 	constraint2 = CircleConstraintForCar(np.array([2, 2]), 1.0, system)
-	start = time.monotonic()
 	for i in range(10):
 		solver.backward_pass()
 		solver.forward_pass()
-	end = time.monotonic()
-	time_nominal = end - start
 	solver.add_constraint(constraint)
 	solver.add_constraint(constraint2)
 	system.set_goal(np.array([3, 3, np.pi/2, 0]))
-	start = time.monotonic()
 	for i in range(20):
 		solver.backward_pass()
 		solver.forward_pass()
-	end = time.monotonic()
-	print("Time elapsed during the process:", end - start + time_nominal)
-	solver.system.draw_trajectories(solver.x_trajectories, constraints=[constraint, constraint2])
+	solver.system.draw_trajectories(solver.x_trajectories)
