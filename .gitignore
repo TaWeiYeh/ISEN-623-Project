@@ -1,5 +1,18 @@
 logs/
 
+# latex files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+*.bbl
+*.blg
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
